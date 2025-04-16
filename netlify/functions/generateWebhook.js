@@ -29,11 +29,24 @@ export default async (req, context) => {
     });
   }
 
+  // Get environment variables - support both Node.js and Deno environments
+  const supabaseUrl = process.env.SUPABASE_URL || Deno.env?.get?.("SUPABASE_URL");
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || Deno.env?.get?.("SUPABASE_SERVICE_KEY");
+
+  // Check if environment variables are set
+  if (!supabaseUrl || !supabaseServiceKey) {
+    console.error("Missing Supabase environment variables");
+    return new Response(JSON.stringify({ error: "Server configuration error" }), {
+      status: 500,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json"
+      }
+    });
+  }
+
   // Initialize Supabase client
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL"),
-    Deno.env.get("SUPABASE_SERVICE_KEY")
-  );
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
     // Parse request body
@@ -70,8 +83,8 @@ export default async (req, context) => {
     
     if (error) throw error;
     
-    // Construct webhook URL
-    const baseUrl = Deno.env.get("URL") || req.headers.get("host");
+    // Construct webhook URL - support both Node.js and Deno environments
+    const baseUrl = process.env.URL || Deno.env?.get?.("URL") || req.headers.get("host");
     const webhookUrl = `${baseUrl}/.netlify/functions/processAlert/${webhookToken}`;
     
     return new Response(JSON.stringify({
