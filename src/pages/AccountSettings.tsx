@@ -7,7 +7,6 @@ import { useAuth } from '../contexts/AuthContext';
 type ApiKeyFormData = {
   api_key: string;
   api_secret: string;
-  test_mode: boolean;
 };
 
 type PasswordFormData = {
@@ -29,8 +28,7 @@ const AccountSettings: React.FC = () => {
   const apiKeyForm = useForm<ApiKeyFormData>({
     defaultValues: {
       api_key: '',
-      api_secret: '',
-      test_mode: true
+      api_secret: ''
     }
   });
   
@@ -42,10 +40,8 @@ const AccountSettings: React.FC = () => {
     }
   });
   
-  const { register: registerApiKey, handleSubmit: handleSubmitApiKey, setValue: setApiKeyValue, watch: watchApiKey } = apiKeyForm;
+  const { register: registerApiKey, handleSubmit: handleSubmitApiKey, setValue: setApiKeyValue } = apiKeyForm;
   const { register: registerPassword, handleSubmit: handleSubmitPassword, reset: resetPassword, formState: { errors: passwordErrors } } = passwordForm;
-  
-  const watchTestMode = watchApiKey('test_mode');
 
   // Fetch API keys if they exist
   useEffect(() => {
@@ -66,7 +62,6 @@ const AccountSettings: React.FC = () => {
         if (data) {
           setApiKeyValue('api_key', data.api_key || '');
           setApiKeyValue('api_secret', data.api_secret || '');
-          setApiKeyValue('test_mode', data.test_mode);
         }
       } catch (error) {
         console.error('Error fetching API keys:', error);
@@ -101,7 +96,6 @@ const AccountSettings: React.FC = () => {
           .update({
             api_key: data.api_key,
             api_secret: data.api_secret,
-            test_mode: data.test_mode,
             updated_at: new Date().toISOString()
           })
           .eq('id', existingKey.id);
@@ -116,7 +110,6 @@ const AccountSettings: React.FC = () => {
             exchange: 'bybit',
             api_key: data.api_key,
             api_secret: data.api_secret,
-            test_mode: data.test_mode,
             created_at: new Date().toISOString()
           });
           
@@ -205,28 +198,13 @@ const AccountSettings: React.FC = () => {
             </div>
             
             <div className="mb-6">
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="test_mode"
-                  className="h-4 w-4 text-blue-600 rounded"
-                  {...registerApiKey('test_mode')}
-                />
-                <label htmlFor="test_mode" className="ml-2 block text-sm text-gray-700">
-                  Use Bybit Testnet
-                </label>
+              <div className="flex items-start p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <AlertTriangle size={16} className="text-blue-500 mr-2 mt-0.5" />
+                <p className="text-sm text-blue-700">
+                  The test mode setting is now controlled at the individual bot level. 
+                  Please configure each bot's test mode setting separately.
+                </p>
               </div>
-              <p className="mt-1 text-xs text-gray-500">
-                Enable this for testing with paper trading on Bybit Testnet.
-              </p>
-              {watchTestMode && (
-                <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-md flex items-start">
-                  <AlertTriangle size={16} className="text-yellow-500 mr-2 mt-0.5" />
-                  <p className="text-sm text-yellow-700">
-                    Testnet mode is enabled. Make sure you are using API keys from the Bybit Testnet environment.
-                  </p>
-                </div>
-              )}
             </div>
             
             <div className="flex items-center">
