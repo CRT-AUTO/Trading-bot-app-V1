@@ -1,8 +1,8 @@
 // Netlify Function for generating webhook URLs
-const { createClient } = require('@supabase/supabase-js');
-const { nanoid } = require('nanoid');
+import { createClient } from '@supabase/supabase-js';
+import { nanoid } from 'nanoid';
 
-exports.handler = async (event, context) => {
+export const handler = async (event, context) => {
   console.log("generateWebhook function started");
   
   // Set CORS headers
