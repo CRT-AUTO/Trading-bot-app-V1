@@ -1,5 +1,4 @@
 // Bybit API utility functions
-
 import axios from 'axios';
 import crypto from 'crypto';
 
@@ -8,26 +7,46 @@ const MAINNET_URL = 'https://api.bybit.com';
 const TESTNET_URL = 'https://api-testnet.bybit.com';
 
 /**
- * Generate signature for API requests.
- *
- * NOTE: This function assumes that the params object already contains a timestamp.
+ * Generate signature for API requests according to Bybit V5 API requirements
  */
 function generateSignature(apiSecret, params) {
-  // Create the query string from the provided params
-  const queryString = Object.keys(params)
+  const timestamp = Date.now().toString();
+  const recv_window = '5000';
+  
+  // Create a copy of the params for signature generation
+  const signParams = { ...params };
+  
+  // Add timestamp and recv_window to params
+  signParams.timestamp = timestamp;
+  signParams.recv_window = recv_window;
+  
+  // Sort keys alphabetically and create the query string
+  const queryString = Object.keys(signParams)
     .sort()
-    .map(key => `${key}=${params[key]}`)
+    .map(key => `${key}=${signParams[key]}`)
     .join('&');
-
+  
   // Generate the HMAC SHA256 signature
-  return crypto
+  const signature = crypto
     .createHmac('sha256', apiSecret)
     .update(queryString)
     .digest('hex');
+  
+  console.log('Generated signature params:', JSON.stringify({
+    ...signParams,
+    apiKey: 'REDACTED',
+    apiSecret: 'REDACTED'
+  }));
+  
+  return { 
+    timestamp,
+    signature,
+    recv_window
+  };
 }
 
 /**
- * Execute an order on Bybit.
+ * Execute an order on Bybit using V5 API
  */
 export async function executeBybitOrder({
   apiKey,
@@ -42,58 +61,65 @@ export async function executeBybitOrder({
   testnet = false
 }) {
   const baseUrl = testnet ? TESTNET_URL : MAINNET_URL;
-  const endpoint = '/v2/private/order/create';
-
-  // Set up order parameters
-  const params = {
-    api_key: apiKey,
-    symbol: symbol,
-    side: side,
-    order_type: orderType,
-    qty: quantity,
-    time_in_force: 'GoodTillCancel'
-  };
-
-  // Add price for Limit orders only
-  if (orderType === 'Limit') {
-    params.price = price;
-  }
-
-  // Add optional stop loss and take profit if provided
-  if (stopLoss) params.stop_loss = stopLoss;
-  if (takeProfit) params.take_profit = takeProfit;
-
-  // Set the timestamp once on the params object
-  const timestamp = Date.now().toString();
-  params.timestamp = timestamp;
-
-  // Generate signature using the params (which already include the timestamp)
-  const signature = generateSignature(apiSecret, { ...params });
-  params.sign = signature;
-
+  const endpoint = '/v5/order/create';
+  
   try {
-    // Convert params to URL-encoded format required by Bybit
-    const encodedParams = new URLSearchParams(params).toString();
-
-    // Execute the POST request with proper headers
-    const response = await axios.post(`${baseUrl}${endpoint}`, encodedParams, {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      }
+    // Set up order parameters according to V5 API
+    const params = {
+      category: 'linear', // Use 'linear' for USDT perpetual contracts
+      symbol: symbol,
+      side: side,
+      orderType: orderType,
+      qty: quantity.toString(), // Make sure quantity is a string
+      timeInForce: 'GoodTillCancel'
+    };
+    
+    // Add price for Limit orders only
+    if (orderType === 'Limit' && price) {
+      params.price = price.toString();
+    }
+    
+    // Add optional stop loss and take profit if provided
+    if (stopLoss) params.stopLoss = stopLoss.toString();
+    if (takeProfit) params.takeProfit = takeProfit.toString();
+    
+    // Generate signature and auth params
+    const { timestamp, signature, recv_window } = generateSignature(apiSecret, params);
+    
+    console.log('Executing Bybit order with params:', {
+      ...params,
+      url: `${baseUrl}${endpoint}`,
+      testnet: testnet
     });
-
-    if (response.data.ret_code === 0) {
+    
+    // Make the request with proper headers
+    const response = await axios({
+      method: 'post',
+      url: `${baseUrl}${endpoint}`,
+      headers: {
+        'X-BAPI-API-KEY': apiKey,
+        'X-BAPI-TIMESTAMP': timestamp,
+        'X-BAPI-RECV-WINDOW': recv_window,
+        'X-BAPI-SIGN': signature,
+        'Content-Type': 'application/json'
+      },
+      data: params
+    });
+    
+    console.log('Bybit API response:', JSON.stringify(response.data));
+    
+    if (response.data.retCode === 0) {
       return {
-        orderId: response.data.result.order_id,
+        orderId: response.data.result.orderId,
         symbol: symbol,
         side: side,
         orderType: orderType,
         qty: quantity,
-        price: price,
-        status: response.data.result.order_status
+        price: price || 0,
+        status: response.data.result.orderStatus || 'Created'
       };
     } else {
-      throw new Error(`Bybit API error: ${response.data.ret_msg}`);
+      throw new Error(`Bybit API error: ${response.data.retMsg}`);
     }
   } catch (error) {
     // Enhanced error logging for debugging
@@ -112,7 +138,7 @@ export async function executeBybitOrder({
 }
 
 /**
- * Get account positions from Bybit.
+ * Get account positions from Bybit using V5 API
  */
 export async function getBybitPositions({
   apiKey,
@@ -121,33 +147,41 @@ export async function getBybitPositions({
   testnet = false
 }) {
   const baseUrl = testnet ? TESTNET_URL : MAINNET_URL;
-  const endpoint = '/v2/private/position/list';
-
-  const params = {
-    api_key: apiKey,
-    symbol: symbol
-  };
-
-  // Set the timestamp on the params object
-  const timestamp = Date.now().toString();
-  params.timestamp = timestamp;
-
-  // Generate signature using the params (which already include the timestamp)
-  const signature = generateSignature(apiSecret, { ...params });
-  params.sign = signature;
-
+  const endpoint = '/v5/position/list';
+  
   try {
-    // Build URL with query parameters
-    const url = new URL(`${baseUrl}${endpoint}`);
-    Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
-
-    // Execute GET request
-    const response = await axios.get(url.toString());
-
-    if (response.data.ret_code === 0) {
+    // Set up query parameters
+    const params = {
+      category: 'linear',
+      symbol: symbol
+    };
+    
+    // Generate signature and auth params
+    const { timestamp, signature, recv_window } = generateSignature(apiSecret, params);
+    
+    console.log('Getting positions with params:', {
+      ...params,
+      url: `${baseUrl}${endpoint}`,
+      testnet: testnet
+    });
+    
+    // Make the request with proper headers
+    const response = await axios({
+      method: 'get',
+      url: `${baseUrl}${endpoint}`,
+      headers: {
+        'X-BAPI-API-KEY': apiKey,
+        'X-BAPI-TIMESTAMP': timestamp,
+        'X-BAPI-RECV-WINDOW': recv_window,
+        'X-BAPI-SIGN': signature
+      },
+      params: params
+    });
+    
+    if (response.data.retCode === 0) {
       return response.data.result;
     } else {
-      throw new Error(`Bybit API error: ${response.data.ret_msg}`);
+      throw new Error(`Bybit API error: ${response.data.retMsg}`);
     }
   } catch (error) {
     // Enhanced error logging for debugging
