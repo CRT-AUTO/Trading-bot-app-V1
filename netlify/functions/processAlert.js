@@ -1,8 +1,8 @@
 // Netlify Function for processing TradingView alerts
-import { createClient } from 'npm:@supabase/supabase-js';
-import { executeBybitOrder } from '../utils/bybit.js';
+const { createClient } = require('@supabase/supabase-js');
+const { executeBybitOrder } = require('../utils/bybit.js');
 
-export default async (req, context) => {
+exports.handler = async (event, context) => {
   console.log("processAlert function started");
   
   // Set CORS headers
@@ -13,42 +13,45 @@ export default async (req, context) => {
   };
 
   // Handle preflight requests
-  if (req.method === "OPTIONS") {
+  if (event.httpMethod === "OPTIONS") {
     console.log("Handling preflight request");
-    return new Response(null, {
-      status: 204,
-      headers: corsHeaders
-    });
+    return {
+      statusCode: 204,
+      headers: corsHeaders,
+      body: ""
+    };
   }
 
   // Only allow POST requests
-  if (req.method !== "POST") {
-    console.log(`Invalid request method: ${req.method}`);
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
+  if (event.httpMethod !== "POST") {
+    console.log(`Invalid request method: ${event.httpMethod}`);
+    return {
+      statusCode: 405,
       headers: {
         ...corsHeaders,
         "Content-Type": "application/json"
-      }
-    });
+      },
+      body: JSON.stringify({ error: "Method not allowed" })
+    };
   }
 
-  // Get environment variables - support both Node.js and Deno environments
-  const supabaseUrl = process.env.SUPABASE_URL || Deno.env?.get?.("SUPABASE_URL");
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || Deno.env?.get?.("SUPABASE_SERVICE_KEY");
+  // Get environment variables
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
   
   console.log(`Environment check: Supabase URL exists: ${!!supabaseUrl}, Service Key exists: ${!!supabaseServiceKey}`);
 
   // Check if environment variables are set
   if (!supabaseUrl || !supabaseServiceKey) {
     console.error("Missing Supabase environment variables");
-    return new Response(JSON.stringify({ error: "Server configuration error" }), {
-      status: 500,
+    return {
+      statusCode: 500,
       headers: {
         ...corsHeaders,
         "Content-Type": "application/json"
-      }
-    });
+      },
+      body: JSON.stringify({ error: "Server configuration error" })
+    };
   }
 
   // Initialize Supabase client
@@ -57,7 +60,7 @@ export default async (req, context) => {
 
   try {
     // Get webhook token from URL path
-    const webhookToken = req.url.split('/').pop();
+    const webhookToken = event.path.split('/').pop();
     console.log(`Processing request for webhook token: ${webhookToken}`);
     
     // Verify webhook token exists and is not expired
@@ -71,20 +74,21 @@ export default async (req, context) => {
     
     if (webhookError || !webhook) {
       console.error("Invalid or expired webhook:", webhookError);
-      return new Response(JSON.stringify({ error: 'Invalid or expired webhook' }), {
-        status: 404,
+      return {
+        statusCode: 404,
         headers: {
           ...corsHeaders,
           "Content-Type": "application/json"
-        }
-      });
+        },
+        body: JSON.stringify({ error: 'Invalid or expired webhook' })
+      };
     }
     
     console.log(`Webhook found for user_id: ${webhook.user_id}, bot_id: ${webhook.bot_id}`);
     
     // Parse TradingView alert data
     console.log("Parsing alert data...");
-    const alertData = await req.json();
+    const alertData = JSON.parse(event.body);
     console.log("Alert data received:", JSON.stringify(alertData));
     
     // Get bot configuration
@@ -102,13 +106,14 @@ export default async (req, context) => {
     
     if (apiKeyError || !apiKey) {
       console.error("API credentials not found:", apiKeyError);
-      return new Response(JSON.stringify({ error: 'API credentials not found' }), {
-        status: 400,
+      return {
+        statusCode: 400,
         headers: {
           ...corsHeaders,
           "Content-Type": "application/json"
-        }
-      });
+        },
+        body: JSON.stringify({ error: 'API credentials not found' })
+      };
     }
     
     console.log("API credentials found, test_mode:", apiKey.test_mode);
@@ -196,27 +201,29 @@ export default async (req, context) => {
     }
     
     console.log("Process completed successfully");
-    return new Response(JSON.stringify({
-      success: true,
-      orderId: orderResult.orderId,
-      status: orderResult.status,
-      testMode: bot.test_mode
-    }), {
-      status: 200,
+    return {
+      statusCode: 200,
       headers: {
         ...corsHeaders,
         "Content-Type": "application/json"
-      }
-    });
+      },
+      body: JSON.stringify({
+        success: true,
+        orderId: orderResult.orderId,
+        status: orderResult.status,
+        testMode: bot.test_mode
+      })
+    };
   } catch (error) {
     console.error('Error processing alert:', error);
     
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
+    return {
+      statusCode: 500,
       headers: {
         ...corsHeaders,
         "Content-Type": "application/json"
-      }
-    });
+      },
+      body: JSON.stringify({ error: error.message })
+    };
   }
 };
