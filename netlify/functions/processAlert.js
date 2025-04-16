@@ -3,6 +3,8 @@ import { createClient } from 'npm:@supabase/supabase-js';
 import { executeBybitOrder } from '../utils/bybit.js';
 
 export default async (req, context) => {
+  console.log("processAlert function started");
+  
   // Set CORS headers
   const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -12,6 +14,7 @@ export default async (req, context) => {
 
   // Handle preflight requests
   if (req.method === "OPTIONS") {
+    console.log("Handling preflight request");
     return new Response(null, {
       status: 204,
       headers: corsHeaders
@@ -20,6 +23,7 @@ export default async (req, context) => {
 
   // Only allow POST requests
   if (req.method !== "POST") {
+    console.log(`Invalid request method: ${req.method}`);
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
       headers: {
@@ -32,6 +36,8 @@ export default async (req, context) => {
   // Get environment variables - support both Node.js and Deno environments
   const supabaseUrl = process.env.SUPABASE_URL || Deno.env?.get?.("SUPABASE_URL");
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || Deno.env?.get?.("SUPABASE_SERVICE_KEY");
+  
+  console.log(`Environment check: Supabase URL exists: ${!!supabaseUrl}, Service Key exists: ${!!supabaseServiceKey}`);
 
   // Check if environment variables are set
   if (!supabaseUrl || !supabaseServiceKey) {
@@ -47,12 +53,15 @@ export default async (req, context) => {
 
   // Initialize Supabase client
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  console.log("Supabase client initialized");
 
   try {
     // Get webhook token from URL path
     const webhookToken = req.url.split('/').pop();
+    console.log(`Processing request for webhook token: ${webhookToken}`);
     
     // Verify webhook token exists and is not expired
+    console.log("Verifying webhook token...");
     const { data: webhook, error: webhookError } = await supabase
       .from('webhooks')
       .select('*, bots(*)')
@@ -61,6 +70,7 @@ export default async (req, context) => {
       .single();
     
     if (webhookError || !webhook) {
+      console.error("Invalid or expired webhook:", webhookError);
       return new Response(JSON.stringify({ error: 'Invalid or expired webhook' }), {
         status: 404,
         headers: {
@@ -70,13 +80,19 @@ export default async (req, context) => {
       });
     }
     
+    console.log(`Webhook found for user_id: ${webhook.user_id}, bot_id: ${webhook.bot_id}`);
+    
     // Parse TradingView alert data
+    console.log("Parsing alert data...");
     const alertData = await req.json();
+    console.log("Alert data received:", JSON.stringify(alertData));
     
     // Get bot configuration
     const bot = webhook.bots;
+    console.log(`Bot configuration retrieved: ${bot.name}, symbol: ${bot.symbol}, test_mode: ${bot.test_mode}`);
     
     // Get API credentials for the user
+    console.log("Fetching API credentials...");
     const { data: apiKey, error: apiKeyError } = await supabase
       .from('api_keys')
       .select('*')
@@ -85,6 +101,7 @@ export default async (req, context) => {
       .single();
     
     if (apiKeyError || !apiKey) {
+      console.error("API credentials not found:", apiKeyError);
       return new Response(JSON.stringify({ error: 'API credentials not found' }), {
         status: 400,
         headers: {
@@ -93,6 +110,8 @@ export default async (req, context) => {
         }
       });
     }
+    
+    console.log("API credentials found, test_mode:", apiKey.test_mode);
     
     // Prepare order parameters
     const orderParams = {
@@ -108,10 +127,17 @@ export default async (req, context) => {
       testnet: apiKey.test_mode || bot.test_mode
     };
     
+    console.log("Order parameters prepared:", JSON.stringify({
+      ...orderParams,
+      apiKey: "REDACTED",
+      apiSecret: "REDACTED"
+    }));
+    
     let orderResult;
     
     // Check if in test mode
     if (bot.test_mode) {
+      console.log("Test mode enabled, simulating order execution");
       // Simulate order execution
       orderResult = {
         orderId: `test-${Date.now()}`,
@@ -123,12 +149,16 @@ export default async (req, context) => {
         status: 'TEST_ORDER'
       };
     } else {
+      console.log("Executing actual order on Bybit");
       // Execute actual order
       orderResult = await executeBybitOrder(orderParams);
     }
     
+    console.log("Order result:", JSON.stringify(orderResult));
+    
     // Log the trade
-    await supabase
+    console.log("Logging trade to database...");
+    const { data: tradeData, error: tradeError } = await supabase
       .from('trades')
       .insert({
         user_id: webhook.user_id,
@@ -142,16 +172,30 @@ export default async (req, context) => {
         status: orderResult.status,
         created_at: new Date().toISOString()
       });
+      
+    if (tradeError) {
+      console.error("Error logging trade:", tradeError);
+    } else {
+      console.log("Trade successfully logged to database");
+    }
     
     // Update bot's last trade timestamp
-    await supabase
+    console.log("Updating bot's last trade timestamp and count...");
+    const { data: botUpdateData, error: botUpdateError } = await supabase
       .from('bots')
       .update({
         last_trade_at: new Date().toISOString(),
         trade_count: bot.trade_count ? bot.trade_count + 1 : 1
       })
       .eq('id', webhook.bot_id);
+      
+    if (botUpdateError) {
+      console.error("Error updating bot:", botUpdateError);
+    } else {
+      console.log("Bot successfully updated");
+    }
     
+    console.log("Process completed successfully");
     return new Response(JSON.stringify({
       success: true,
       orderId: orderResult.orderId,
