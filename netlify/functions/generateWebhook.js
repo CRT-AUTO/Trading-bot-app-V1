@@ -107,7 +107,7 @@ exports.handler = async (event, context) => {
     console.log("Webhook successfully stored in database");
     
     // Construct webhook URL
-    const baseUrl = process.env.URL || event.headers.host;
+    const baseUrl = process.env.URL || `https://${event.headers.host}`;
     console.log(`Using base URL: ${baseUrl}`);
     
     const webhookUrl = `${baseUrl}/.netlify/functions/processAlert/${webhookToken}`;
