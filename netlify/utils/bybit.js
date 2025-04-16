@@ -1,6 +1,6 @@
 // Bybit API utility functions
-import axios from 'npm:axios@1.6.0';
-import crypto from 'node:crypto';
+const axios = require('axios');
+const crypto = require('crypto');
 
 // Base URLs
 const MAINNET_URL = 'https://api.bybit.com';
@@ -24,7 +24,7 @@ function generateSignature(apiSecret, params) {
 }
 
 // Function to execute order on Bybit
-export async function executeBybitOrder({
+function executeBybitOrder({
   apiKey,
   apiSecret,
   symbol,
@@ -62,29 +62,29 @@ export async function executeBybitOrder({
   params.timestamp = timestamp;
   params.sign = signature;
   
-  try {
-    const response = await axios.post(`${baseUrl}${endpoint}`, params);
-    
-    if (response.data.ret_code === 0) {
-      return {
-        orderId: response.data.result.order_id,
-        symbol: symbol,
-        side: side,
-        orderType: orderType,
-        qty: quantity,
-        price: price,
-        status: response.data.result.order_status
-      };
-    } else {
-      throw new Error(`Bybit API error: ${response.data.ret_msg}`);
-    }
-  } catch (error) {
-    throw new Error(`Failed to execute order: ${error.message}`);
-  }
+  return axios.post(`${baseUrl}${endpoint}`, params)
+    .then(response => {
+      if (response.data.ret_code === 0) {
+        return {
+          orderId: response.data.result.order_id,
+          symbol: symbol,
+          side: side,
+          orderType: orderType,
+          qty: quantity,
+          price: price,
+          status: response.data.result.order_status
+        };
+      } else {
+        throw new Error(`Bybit API error: ${response.data.ret_msg}`);
+      }
+    })
+    .catch(error => {
+      throw new Error(`Failed to execute order: ${error.message}`);
+    });
 }
 
 // Function to get account positions
-export async function getBybitPositions({
+function getBybitPositions({
   apiKey,
   apiSecret,
   symbol,
@@ -103,15 +103,20 @@ export async function getBybitPositions({
   params.timestamp = timestamp;
   params.sign = signature;
   
-  try {
-    const response = await axios.get(`${baseUrl}${endpoint}`, { params });
-    
-    if (response.data.ret_code === 0) {
-      return response.data.result;
-    } else {
-      throw new Error(`Bybit API error: ${response.data.ret_msg}`);
-    }
-  } catch (error) {
-    throw new Error(`Failed to get positions: ${error.message}`);
-  }
+  return axios.get(`${baseUrl}${endpoint}`, { params })
+    .then(response => {
+      if (response.data.ret_code === 0) {
+        return response.data.result;
+      } else {
+        throw new Error(`Bybit API error: ${response.data.ret_msg}`);
+      }
+    })
+    .catch(error => {
+      throw new Error(`Failed to get positions: ${error.message}`);
+    });
 }
+
+module.exports = {
+  executeBybitOrder,
+  getBybitPositions
+};
