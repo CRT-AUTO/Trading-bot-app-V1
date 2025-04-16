@@ -3,7 +3,7 @@ import axios from 'axios';
 import crypto from 'crypto';
 
 // Base URLs
-const MAINNET_URL = 'https://api.bytick.com';
+const MAINNET_URL = 'https://api.byhkbit.com';
 const TESTNET_URL = 'https://api-testnet.bybit.com';
 
 /**
