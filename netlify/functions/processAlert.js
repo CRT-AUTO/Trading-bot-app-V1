@@ -1,8 +1,8 @@
 // Netlify Function for processing TradingView alerts
-const { createClient } = require('@supabase/supabase-js');
-const { executeBybitOrder } = require('../utils/bybit.js');
+import { createClient } from '@supabase/supabase-js';
+import { executeBybitOrder } from '../utils/bybit.mjs';
 
-exports.handler = async (event, context) => {
+export const handler = async (event, context) => {
   console.log("processAlert function started");
   
   // Set CORS headers
