@@ -1,5 +1,5 @@
 // Netlify Function for processing TradingView alerts
-import { createClient } from 'npm:@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 import { executeBybitOrder } from '../utils/bybit.js';
 
 export default async (req, context) => {
