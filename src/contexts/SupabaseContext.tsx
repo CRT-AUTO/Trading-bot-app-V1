@@ -1,30 +1,5 @@
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-
-// Initialize Supabase client with runtime values
-// This ensures the actual values aren't bundled in the client code
-// and instead are loaded dynamically at runtime
-const getSupabaseConfig = () => {
-  // For local development, Vite will inject these from .env
-  // For production, they will be injected by Netlify environment variables
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 
-                      // Fallback to the placeholder that will be replaced at runtime
-                      window.__SUPABASE_URL__ || 
-                      '';
-                      
-  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 
-                          // Fallback to the placeholder that will be replaced at runtime
-                          window.__SUPABASE_ANON_KEY__ || 
-                          '';
-
-  return { supabaseUrl, supabaseAnonKey };
-};
-
-// Get the config at runtime
-const { supabaseUrl, supabaseAnonKey } = getSupabaseConfig();
-
-// Create the Supabase client
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Create context
 type SupabaseContextType = {
@@ -33,10 +8,71 @@ type SupabaseContextType = {
 
 const SupabaseContext = createContext<SupabaseContextType | undefined>(undefined);
 
+// Get Supabase configuration at runtime
+const getSupabaseConfig = () => {
+  // For local development, use Vite environment variables
+  const envUrl = import.meta.env.VITE_SUPABASE_URL;
+  const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  
+  // For production, use values injected at runtime by Netlify
+  const runtimeUrl = window.__SUPABASE_URL__;
+  const runtimeKey = window.__SUPABASE_ANON_KEY__;
+  
+  // Always prioritize environment variables during development
+  // Only fall back to runtime values if env variables are not available
+  const supabaseUrl = envUrl || '';
+  const supabaseAnonKey = envKey || '';
+  
+  console.log('Supabase URL:', supabaseUrl ? 'URL configured' : 'Missing URL');
+  console.log('Supabase Anon Key:', supabaseAnonKey ? 'Key configured' : 'Missing key');
+  
+  return { supabaseUrl, supabaseAnonKey };
+};
+
 // Provider component
 export const SupabaseProvider: React.FC<{
   children: React.ReactNode;
 }> = ({ children }) => {
+  const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const initializeSupabase = () => {
+      const { supabaseUrl, supabaseAnonKey } = getSupabaseConfig();
+      
+      if (!supabaseUrl || !supabaseAnonKey) {
+        console.error('Supabase configuration is missing or incorrect.');
+        return null;
+      }
+      
+      return createClient(supabaseUrl, supabaseAnonKey);
+    };
+    
+    const client = initializeSupabase();
+    if (client) {
+      setSupabase(client);
+    }
+    setLoading(false);
+  }, []);
+
+  if (loading) {
+    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+  }
+
+  if (!supabase) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center">
+        <h1 className="text-xl font-bold text-red-600 mb-2">Configuration Error</h1>
+        <p className="text-gray-800 mb-4">
+          Unable to connect to Supabase. Please check your environment configuration.
+        </p>
+        <p className="text-gray-600 text-sm">
+          Make sure your .env file contains valid VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY values.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <SupabaseContext.Provider value={{ supabase }}>
       {children}
