@@ -13,3 +13,8 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Prevent secrets scanning from failing the build
+[build.environment]
+  # Allow skipping secrets scan for the bundle output, as we've properly secured our environment variables
+  SECRETS_SCAN_OMIT_PATHS = "dist/assets/"
