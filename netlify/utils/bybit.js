@@ -61,9 +61,16 @@ function executeBybitOrder({
   const { timestamp, signature } = generateSignature(apiSecret, params);
   params.timestamp = timestamp;
   params.sign = signature;
+
+  // Log request parameters (redacted)
+  const redactedParams = { ...params, api_key: 'REDACTED' };
+  console.log('Bybit API Request:', JSON.stringify(redactedParams));
   
   return axios.post(`${baseUrl}${endpoint}`, params)
     .then(response => {
+      // Log raw response
+      console.log('Bybit API Response:', JSON.stringify(response.data));
+
       if (response.data.ret_code === 0) {
         return {
           orderId: response.data.result.order_id,
@@ -79,6 +86,12 @@ function executeBybitOrder({
       }
     })
     .catch(error => {
+      // Log detailed error information
+      console.error('Bybit API Error:', error.message);
+      console.log('Request Parameters (Redacted):', JSON.stringify(redactedParams));
+      if (error.response) {
+        console.log('Response Data:', JSON.stringify(error.response.data));
+      }
       throw new Error(`Failed to execute order: ${error.message}`);
     });
 }
