@@ -1,6 +1,6 @@
 // Bybit API utility functions
-import axios from 'npm:axios@1.6.0';
-import crypto from 'node:crypto';
+import axios from 'axios';
+import crypto from 'crypto';
 
 // Base URLs
 const MAINNET_URL = 'https://api.bybit.com';
