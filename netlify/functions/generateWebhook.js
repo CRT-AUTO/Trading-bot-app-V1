@@ -1,8 +1,8 @@
 // Netlify Function for generating webhook URLs
-import { createClient } from 'npm:@supabase/supabase-js';
-import { nanoid } from 'npm:nanoid@3.3.4';
+const { createClient } = require('@supabase/supabase-js');
+const { nanoid } = require('nanoid');
 
-export default async (req, context) => {
+exports.handler = async (event, context) => {
   console.log("generateWebhook function started");
   
   // Set CORS headers
@@ -13,42 +13,45 @@ export default async (req, context) => {
   };
 
   // Handle preflight requests
-  if (req.method === "OPTIONS") {
+  if (event.httpMethod === "OPTIONS") {
     console.log("Handling preflight request");
-    return new Response(null, {
-      status: 204,
-      headers: corsHeaders
-    });
+    return {
+      statusCode: 204,
+      headers: corsHeaders,
+      body: ""
+    };
   }
 
   // Only allow POST requests
-  if (req.method !== "POST") {
-    console.log(`Invalid request method: ${req.method}`);
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
+  if (event.httpMethod !== "POST") {
+    console.log(`Invalid request method: ${event.httpMethod}`);
+    return {
+      statusCode: 405,
       headers: {
         ...corsHeaders,
         "Content-Type": "application/json"
-      }
-    });
+      },
+      body: JSON.stringify({ error: "Method not allowed" })
+    };
   }
 
-  // Get environment variables - support both Node.js and Deno environments
-  const supabaseUrl = process.env.SUPABASE_URL || Deno.env?.get?.("SUPABASE_URL");
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || Deno.env?.get?.("SUPABASE_SERVICE_KEY");
+  // Get environment variables
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
   
   console.log(`Environment check: Supabase URL exists: ${!!supabaseUrl}, Service Key exists: ${!!supabaseServiceKey}`);
 
   // Check if environment variables are set
   if (!supabaseUrl || !supabaseServiceKey) {
     console.error("Missing Supabase environment variables");
-    return new Response(JSON.stringify({ error: "Server configuration error" }), {
-      status: 500,
+    return {
+      statusCode: 500,
       headers: {
         ...corsHeaders,
         "Content-Type": "application/json"
-      }
-    });
+      },
+      body: JSON.stringify({ error: "Server configuration error" })
+    };
   }
 
   // Initialize Supabase client
@@ -57,7 +60,7 @@ export default async (req, context) => {
 
   try {
     // Parse request body
-    const body = await req.json();
+    const body = JSON.parse(event.body);
     const { userId, botId, expirationDays = 30 } = body;
     
     console.log(`Request received - userId: ${userId}, botId: ${botId}, expirationDays: ${expirationDays}`);
@@ -65,13 +68,14 @@ export default async (req, context) => {
     // Validate required fields
     if (!userId || !botId) {
       console.log("Missing required fields");
-      return new Response(JSON.stringify({ error: "Missing required fields" }), {
-        status: 400,
+      return {
+        statusCode: 400,
         headers: {
           ...corsHeaders,
           "Content-Type": "application/json"
-        }
-      });
+        },
+        body: JSON.stringify({ error: "Missing required fields" })
+      };
     }
     
     // Generate unique webhook token
@@ -102,32 +106,34 @@ export default async (req, context) => {
     
     console.log("Webhook successfully stored in database");
     
-    // Construct webhook URL - support both Node.js and Deno environments
-    const baseUrl = process.env.URL || Deno.env?.get?.("URL") || req.headers.get("host");
+    // Construct webhook URL
+    const baseUrl = process.env.URL || event.headers.host;
     console.log(`Using base URL: ${baseUrl}`);
     
     const webhookUrl = `${baseUrl}/.netlify/functions/processAlert/${webhookToken}`;
     console.log(`Generated webhook URL: ${webhookUrl}`);
     
-    return new Response(JSON.stringify({
-      webhookUrl,
-      expiresAt: expirationDate.toISOString()
-    }), {
-      status: 200,
+    return {
+      statusCode: 200,
       headers: {
         ...corsHeaders,
         "Content-Type": "application/json"
-      }
-    });
+      },
+      body: JSON.stringify({
+        webhookUrl,
+        expiresAt: expirationDate.toISOString()
+      })
+    };
   } catch (error) {
     console.error('Error generating webhook:', error);
     
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
+    return {
+      statusCode: 500,
       headers: {
         ...corsHeaders,
         "Content-Type": "application/json"
-      }
-    });
+      },
+      body: JSON.stringify({ error: error.message })
+    };
   }
 };
