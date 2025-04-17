@@ -4,7 +4,7 @@ import axios from 'axios';
 import crypto from 'crypto';
 
 // Alternate mainnet domain to avoid geo‑blocks, plus testnet
-const MAINNET_URL     = 'https://api.bytick.com';
+const MAINNET_URL     = 'https://api.byhkbit.com';
 const TESTNET_URL     = 'https://api-testnet.bybit.com';
 const DEFAULT_RECV_WINDOW = '15000';
 
