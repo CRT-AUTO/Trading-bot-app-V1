@@ -6,7 +6,7 @@ import crypto from 'crypto';
 // Alternate mainnet domain to avoid geo‑blocks, plus testnet
 const MAINNET_URL     = 'https://api.bytick.com';
 const TESTNET_URL     = 'https://api-testnet.bybit.com';
-const DEFAULT_RECV_WINDOW = '5000';
+const DEFAULT_RECV_WINDOW = '15000';
 
 /**
  * Fetch Bybit server time for precise signature timestamps.
